@@ -1,0 +1,76 @@
+---
+title: "t-Tests"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+library(tidyverse)
+```
+
+```{r}
+group1 <- rnorm(100, 0, 1)
+group2 <- rnorm(100, 1, 1)
+```
+
+```{r}
+data <- data.frame(group1 = group1,
+                   group2 = group2) %>% 
+  pivot_longer(cols = group1:group2, names_to = "beer", values_to = "taste_rating")
+```
+
+```{r}
+data %>% 
+  ggplot(aes(x = taste_rating, fill = beer)) +
+  geom_histogram(binwidth = .1, position = "identity", alpha = .6) +
+  theme(legend.position = "top")
+```
+
+```{r}
+t.test(group1, group2)
+t.test(data$taste_rating ~ data$beer)
+```
+
+```{r}
+t_test_simulation <- function(samplesizes, nruns, diff) {
+  results <- expand.grid(samplesizes = samplesizes,
+                         nrun = 1:nruns)
+  
+  results$pvalue <- NA
+  
+  for (i_samplesize in samplesizes) {
+    for (j_run in 1:nruns) {
+      group1 <- rnorm(i_samplesize, 0, 1)
+      group2 <- rnorm(i_samplesize, diff, 1)
+      
+      results$pvalue[results$samplesizes == i_samplesize & results$nrun == j_run] <- 
+        t.test(group1, group2)$p.value
+    }
+  }
+  
+  return(results)
+}
+```
+
+```{r}
+samplesizes <- seq(10, 200, 5)
+nruns <- 1000
+
+results <- t_test_simulation(samplesizes, nruns, diff = .5)
+```
+
+```{r}
+results_summary <- results %>% 
+  mutate(sign = pvalue < .05) %>% 
+  group_by(samplesizes) %>% 
+  summarise(perc_sign = mean(sign), .groups = "drop")
+```
+
+```{r}
+results_summary %>% 
+  ggplot(aes(x = samplesizes, y = perc_sign)) +
+  geom_point() +
+  scale_y_continuous(breaks = seq(0, 1, .1), limits = c(0, 1)) +
+  scale_x_continuous(breaks = seq(10, 200, 20))
+```
+
