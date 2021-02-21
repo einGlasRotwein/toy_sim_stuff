@@ -78,7 +78,7 @@ t_test_simulation <- function(samplesizes, nruns, diff) {
 
 Setting example values
 ```{r}
-samplesizes <- seq(10, 200, 5) #0-200 in steps of 5
+samplesizes <- seq(10, 200, 5) #10-200 in steps of 5
 nruns <- 1000
 
 results_samplesize <- t_test_simulation(samplesizes, nruns, diff = .5)
@@ -156,6 +156,7 @@ results_summary_diff %>%
 ```{r}
 t_test_simulation <- function(samplesizes, nruns, diff) {
   results <- expand.grid(samplesizes = samplesizes,
+                         diff = diff,
                          nrun = 1:nruns)
   
   results$pvalue <- NA
@@ -163,11 +164,17 @@ t_test_simulation <- function(samplesizes, nruns, diff) {
   
   for (i_samplesize in samplesizes) { 
     for (j_run in 1:nruns) {
-      group1 <- rnorm(i_samplesize, 0, 1)
-      group2 <- rnorm(i_samplesize, diff, 1)
-      
-      results$pvalue[results$samplesizes == i_samplesize & results$nrun == j_run] <- 
-        t.test(group1, group2)$p.value
+      for (k_diff in diff) {
+        group1 <- rnorm(i_samplesize, 0, 1)
+        group2 <- rnorm(i_samplesize, k_diff, 1)
+        
+        results$pvalue[
+          results$samplesizes == i_samplesize &
+            results$nrun == j_run &
+            results$diff == k_diff
+          ] <- 
+          t.test(group1, group2)$p.value
+      }
     }
   }
   
@@ -176,45 +183,45 @@ t_test_simulation <- function(samplesizes, nruns, diff) {
 ```
 
 ```{r}
-samplesizes <- seq(10, 200, 5) 
-nruns <- 1000
-diff <- c(0.3, 0.5, 0.8)
+samplesizes <- seq(10, 200, 10) 
+nruns <- 500
+diff <- seq(0, 1, 0.25)
 
-results_diff1 <- t_test_simulation(samplesizes, nruns, diff = diff[1])
-results_diff2 <- t_test_simulation(samplesizes, nruns, diff = diff[2])
-results_diff3 <- t_test_simulation(samplesizes, nruns, diff = diff[3])
+results <- t_test_simulation(samplesizes, nruns, diff)
+
 ```
 
-
 ```{r}
-results_summary_diff1 <- results_diff1 %>% 
+results0_5 <- results %>% 
   mutate(sign = pvalue < .05) %>% 
-  group_by(samplesizes) %>% 
+  group_by(samplesizes, diff) %>%
   summarise(perc_sign = mean(sign), .groups = "drop") %>%
-  mutate(effectsize = diff[1])
-results_summary_diff2 <- results_diff2 %>% 
-  mutate(sign = pvalue < .05) %>% 
-  group_by(samplesizes) %>% 
+  mutate(alpha = 0.05)
+
+results0_01 <- results %>% 
+  mutate(sign = pvalue < .001) %>% 
+  group_by(samplesizes, diff) %>%
   summarise(perc_sign = mean(sign), .groups = "drop") %>%
-  mutate(effectsize = diff[2])
-results_summary_diff3 <- results_diff3 %>% 
-  mutate(sign = pvalue < .05) %>% 
-  group_by(samplesizes) %>% 
-  summarise(perc_sign = mean(sign), .groups = "drop")%>%
-  mutate(effectsize = diff[3])
+  mutate(alpha = 0.001)
+
+results1 <- results %>% 
+  mutate(sign = pvalue < .1) %>% 
+  group_by(samplesizes, diff) %>%
+  summarise(perc_sign = mean(sign), .groups = "drop") %>%
+  mutate(alpha = 0.1)
+
+results_all <- rbind.data.frame(results0_5, results0_01)
 ```
 
 
 ```{r}
 ggplot() +
-  geom_point(data=results_summary_diff1, aes(x = samplesizes, y = perc_sign, colour="red", )) +
-  geom_point(data=results_summary_diff2, aes(x = samplesizes, y = perc_sign, colour="blue", )) +
-  geom_point(data=results_summary_diff3, aes(x = samplesizes, y = perc_sign, colour="black", )) +
+  geom_point(data = results_all, aes(x = samplesizes, y = perc_sign, colour = factor(diff, levels = seq(1, 0, -0.25), ordered = TRUE))) + guides(colour = guide_legend(title = "effect size")) +
+  theme(legend.position = "top") +
   scale_y_continuous(breaks = seq(0, 1, .1), limits = c(0, 1)) +
   scale_x_continuous(breaks = seq(10, 200, 20)) +
-  scale_colour_manual(name  ="Effect size",values = c("black", "blue", "red"), breaks=c("black", "blue", "red"), labels=rev(diff)) +
-  xlab("samplesize")
-
+  xlab("sample size") +
+  facet_wrap(~alpha)
 
 ```
 
