@@ -1,0 +1,221 @@
+---
+title: "t-Test Karla"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+library(tidyverse)
+```
+
+Exkurs power-package
+```{r pwr}
+#install.packages("pwr")
+#library("pwr")
+#?pwr.t.test
+#r_power <- pwr.t.test(n=1000,
+#                      sig.level=0.05,
+#                      power = .8,
+#                      alternative = "two.sided",
+#                      type = "two.sample")
+#r_power
+#plot(r_power)
+```
+
+Creating groups with n= 100 random deviates, mean = 0 / mean = 1 and sd = 1
+```{r}
+group1 <- rnorm(100, 0, 1)
+group2 <- rnorm(100, 1, 1)
+```
+
+Wide to long format
+```{r}
+data <- data.frame(group1 = group1,
+                   group2 = group2) %>% 
+  pivot_longer(cols = group1:group2, names_to = "Group", values_to = "Value")
+```
+
+```{r}
+data %>% 
+  ggplot(aes(x = Value, fill = Group)) +
+  geom_histogram(binwidth = .1, position = "identity", alpha = .6) +
+  theme(legend.position = "top")
+```
+
+t-test (by default two sided)
+```{r}
+t.test(group1, group2)
+```
+
+
+Simulating different samplesizes
+
+Creating the function t_test_simulation:
+
+1. calculates two normal distributed, random groups for each samplesize and each runs (for example: we want samplesizes from 0 to 100, and simulate each trial 20 times)
+
+2. Executes t-test and pushes p-values into results-table (compares the two groups from each run according to samplesize)
+```{r}
+t_test_simulation <- function(samplesizes, nruns, diff) {
+  results <- expand.grid(samplesizes = samplesizes,
+                         nrun = 1:nruns)
+  
+  results$pvalue <- NA
+  
+  for (i_samplesize in samplesizes) { 
+    for (j_run in 1:nruns) {
+      group1 <- rnorm(i_samplesize, 0, 1)
+      group2 <- rnorm(i_samplesize, diff, 1)
+      
+      results$pvalue[results$samplesizes == i_samplesize & results$nrun == j_run] <- 
+        t.test(group1, group2)$p.value
+    }
+  }
+  
+  return(results)
+}
+```
+
+Setting example values
+```{r}
+samplesizes <- seq(10, 200, 5) #0-200 in steps of 5
+nruns <- 1000
+
+results_samplesize <- t_test_simulation(samplesizes, nruns, diff = .5)
+
+head(results_samplesize)
+```
+
+Mean of only significant (!) p-values per samplesize over all runs 
+```{r}
+results_summary_samplesize <- results_samplesize %>% 
+  mutate(sign = pvalue < .05) %>% 
+  group_by(samplesizes) %>% 
+  summarise(perc_sign = mean(sign), .groups = "drop")
+
+head(results_summary_samplesize)
+```
+
+Plots the results
+```{r}
+results_summary_samplesize %>% 
+  ggplot(aes(x = samplesizes, y = perc_sign)) +
+  xlab("samplesize") +
+  geom_point() +
+  scale_y_continuous(breaks = seq(0, 1, .1), limits = c(0, 1)) +
+  scale_x_continuous(breaks = seq(10, 200, 20))
+```
+
+
+#2. Changing effect size 
+```{r}
+t_test_simulation_diff <- function(samplesizes, nruns, diff) {
+  results_diff <- expand.grid(diff = diff,
+                         nrun = 1:nruns)
+  
+  results_diff$pvalue <- NA
+  
+  for (i_diff in diff) {
+    for (j_run in 1:nruns) {
+      group1 <- rnorm(samplesizes, 0, 1)
+      group2 <- rnorm(samplesizes, i_diff, 1)
+      
+      results_diff$pvalue[results_diff$diff == i_diff & results_diff$nrun == j_run] <- 
+        t.test(group1, group2)$p.value
+    }
+  }
+  
+  return(results_diff)
+}
+```
+
+```{r}
+diff <- seq(0, 1, 0.1)
+nruns <- 1000
+
+results_diff <- t_test_simulation_diff(samplesizes = 100, nruns, diff)
+```
+
+```{r}
+results_summary_diff <- results_diff %>% 
+  mutate(sign = pvalue < .05) %>% 
+  group_by(diff) %>% 
+  summarise(perc_sign = mean(sign), .groups = "drop")
+```
+
+```{r}
+results_summary_diff %>% 
+  ggplot(aes(x = diff, y = perc_sign)) +
+  xlab("effect size") +
+  geom_point() +
+  scale_y_continuous(breaks = seq(0, 1, .1), limits = c(0, 1)) +
+  scale_x_continuous(breaks = seq(0, 1, 0.1))
+```
+
+#3. Combining effect size and sample size 
+```{r}
+t_test_simulation <- function(samplesizes, nruns, diff) {
+  results <- expand.grid(samplesizes = samplesizes,
+                         nrun = 1:nruns)
+  
+  results$pvalue <- NA
+  results$effectsize <- NA
+  
+  for (i_samplesize in samplesizes) { 
+    for (j_run in 1:nruns) {
+      group1 <- rnorm(i_samplesize, 0, 1)
+      group2 <- rnorm(i_samplesize, diff, 1)
+      
+      results$pvalue[results$samplesizes == i_samplesize & results$nrun == j_run] <- 
+        t.test(group1, group2)$p.value
+    }
+  }
+  
+  return(results)
+}
+```
+
+```{r}
+samplesizes <- seq(10, 200, 5) 
+nruns <- 1000
+diff <- c(0.3, 0.5, 0.8)
+
+results_diff1 <- t_test_simulation(samplesizes, nruns, diff = diff[1])
+results_diff2 <- t_test_simulation(samplesizes, nruns, diff = diff[2])
+results_diff3 <- t_test_simulation(samplesizes, nruns, diff = diff[3])
+```
+
+
+```{r}
+results_summary_diff1 <- results_diff1 %>% 
+  mutate(sign = pvalue < .05) %>% 
+  group_by(samplesizes) %>% 
+  summarise(perc_sign = mean(sign), .groups = "drop") %>%
+  mutate(effectsize = diff[1])
+results_summary_diff2 <- results_diff2 %>% 
+  mutate(sign = pvalue < .05) %>% 
+  group_by(samplesizes) %>% 
+  summarise(perc_sign = mean(sign), .groups = "drop") %>%
+  mutate(effectsize = diff[2])
+results_summary_diff3 <- results_diff3 %>% 
+  mutate(sign = pvalue < .05) %>% 
+  group_by(samplesizes) %>% 
+  summarise(perc_sign = mean(sign), .groups = "drop")%>%
+  mutate(effectsize = diff[3])
+```
+
+
+```{r}
+ggplot() +
+  geom_point(data=results_summary_diff1, aes(x = samplesizes, y = perc_sign, colour="red", )) +
+  geom_point(data=results_summary_diff2, aes(x = samplesizes, y = perc_sign, colour="blue", )) +
+  geom_point(data=results_summary_diff3, aes(x = samplesizes, y = perc_sign, colour="black", )) +
+  scale_y_continuous(breaks = seq(0, 1, .1), limits = c(0, 1)) +
+  scale_x_continuous(breaks = seq(10, 200, 20)) +
+  scale_colour_manual(name  ="Effect size",values = c("black", "blue", "red"), breaks=c("black", "blue", "red"), labels=rev(diff)) +
+  xlab("samplesize")
+
+
+```
+
+
