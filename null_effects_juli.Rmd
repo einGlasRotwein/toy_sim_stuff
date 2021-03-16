@@ -1,0 +1,79 @@
+---
+title: "Null effects"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+
+library(effsize)
+library(tidyverse)
+
+julis_theme <- 
+  theme(panel.background = element_blank(),
+        panel.grid = element_blank(),
+        axis.line = element_line(colour = "black"),
+        legend.position = "top")
+```
+
+```{r}
+t_test_simulation <- function(samplesizes, nruns, diff) {
+  results <- expand.grid(samplesizes = samplesizes,
+                         diff = diff,
+                         nrun = 1:nruns)
+  
+  results$pvalue <- NA
+  results$effectsize <- NA
+  
+  for (i_samplesize in samplesizes) {
+    for (j_run in 1:nruns) {
+      for (k_diff in diff) {
+              
+      group1 <- rnorm(i_samplesize, 0, 1)
+      group2 <- rnorm(i_samplesize, k_diff, 1)
+      
+      results$pvalue[results$samplesizes == i_samplesize & results$nrun == j_run & results$diff == k_diff] <- 
+        t.test(group1, group2)$p.value
+      
+      results$effectsize[results$samplesizes == i_samplesize & results$nrun == j_run & results$diff == k_diff] <- 
+        cohen.d(group1, group2)$estimate
+      }
+    }
+  }
+  
+  return(results)
+}
+```
+
+```{r}
+results <- t_test_simulation(100, 1000, c(0, .1, .5))
+```
+
+```{r}
+results %>% 
+  ggplot(aes(x = pvalue)) +
+  geom_histogram(binwidth = .01) +
+  geom_vline(xintercept = .05) +
+  facet_wrap(~diff) +
+  julis_theme
+```
+```{r}
+results %>% 
+  ggplot(aes(x = effectsize)) +
+  geom_histogram(binwidth = .01) +
+  facet_wrap(~diff) +
+  julis_theme
+```
+
+```{r}
+results2 <- t_test_simulation(seq(100, 1000, 100), 100, c(0, .1, .5))
+```
+
+```{r}
+results2 %>% 
+  ggplot(aes(x = samplesizes, y = effectsize)) +
+  geom_point() +
+  facet_wrap(~diff) +
+  julis_theme
+```
+
